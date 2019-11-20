@@ -334,7 +334,7 @@ COMMAND_HANDLER(handle_rtt_channels_command)
 		return ERROR_FAIL;
 	}
 
-	command_print(CMD_CTX, "Channels: up=%u, down=%u",
+	command_print(CMD, "Channels: up=%u, down=%u",
 		global_ctrl.num_up_buffers, global_ctrl.num_down_buffers);
 
 	LOG_INFO("Up-channels:");
