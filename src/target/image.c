@@ -643,8 +643,8 @@ static int image_mot_buffer_complete_inner(struct image *image,
 					section[image->num_sections].size += 1;
 					full_address++;
 				}
-			} else if (record_type == 5) {
-				/* S5 is the data count record, we ignore it */
+			} else if (record_type == 5 || record_type == 6) {
+				/* S5 and S6 are the data count records, we ignore them */
 				uint32_t dummy;
 
 				while (count-- > 0) {
@@ -1048,8 +1048,7 @@ int image_calculate_checksum(uint8_t *buffer, uint32_t nbytes, uint32_t *checksu
 	static bool first_init;
 	if (!first_init) {
 		/* Initialize the CRC table and the decoding table.  */
-		int i, j;
-		unsigned int c;
+		unsigned int i, j, c;
 		for (i = 0; i < 256; i++) {
 			/* as per gdb */
 			for (c = i << 24, j = 8; j > 0; --j)

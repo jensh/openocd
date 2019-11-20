@@ -166,7 +166,7 @@ static const struct efm32_family_data efm32_families[] = {
 		{ 89, "EFM32PG13B Pearl", .series = 1 },
 		{ 91, "EFM32JG13B Jade", .series = 1 },
 		{ 100, "EFM32GG11B Giant", .series = 1, .msc_regbase = 0x40000000 },
-		{ 103, "EFM32TG11B Tiny", .series = 1 },
+		{ 103, "EFM32TG11B Tiny", .series = 1, .msc_regbase = 0x40000000 },
 		{ 120, "EZR32WG Wonder", .series = 0 },
 		{ 121, "EZR32LG Leopard", .series = 0 },
 		{ 122, "EZR32HG Happy", .series = 0, .page_size = 1024 },
@@ -429,7 +429,7 @@ static int efm32x_erase_page(struct flash_bank *bank, uint32_t addr)
 	 */
 	int ret = 0;
 	uint32_t status = 0;
-
+	addr += bank->base;
 	LOG_DEBUG("erasing flash page at 0x%08" PRIx32, addr);
 
 	ret = efm32x_write_reg_u32(bank, EFM32_MSC_REG_ADDRB, addr);
@@ -1093,7 +1093,7 @@ COMMAND_HANDLER(efm32x_handle_debuglock_command)
 		return retval;
 	}
 
-	command_print(CMD_CTX, "efm32x debug interface locked, reset the device to apply");
+	command_print(CMD, "efm32x debug interface locked, reset the device to apply");
 
 	return ERROR_OK;
 }
@@ -1120,7 +1120,7 @@ static const struct command_registration efm32x_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
-struct flash_driver efm32_flash = {
+const struct flash_driver efm32_flash = {
 	.name = "efm32",
 	.commands = efm32x_command_handlers,
 	.flash_bank_command = efm32x_flash_bank_command,
@@ -1133,4 +1133,5 @@ struct flash_driver efm32_flash = {
 	.erase_check = default_flash_blank_check,
 	.protect_check = efm32x_protect_check,
 	.info = get_efm32x_info,
+	.free_driver_priv = default_flash_free_driver_priv,
 };

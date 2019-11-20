@@ -1,20 +1,20 @@
 /*
-    OpenOCD STM8 target driver
-    Copyright (C) 2017  Ake Rehnman
-    ake.rehnman(at)gmail.com
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*   OpenOCD STM8 target driver
+*   Copyright (C) 2017  Ake Rehnman
+*   ake.rehnman(at)gmail.com
+*
+*   This program is free software: you can redistribute it and/or modify
+*   it under the terms of the GNU General Public License as published by
+*   the Free Software Foundation, either version 2 of the License, or
+*   (at your option) any later version.
+*
+*   This program is distributed in the hope that it will be useful,
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*   GNU General Public License for more details.
+*
+*   You should have received a copy of the GNU General Public License
+*   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #ifdef HAVE_CONFIG_H
@@ -1189,6 +1189,11 @@ static int stm8_write_core_reg(struct target *target, unsigned int num)
 	return ERROR_OK;
 }
 
+static const char *stm8_get_gdb_arch(struct target *target)
+{
+	return "stm8";
+}
+
 static int stm8_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
 		int *reg_list_size, enum target_register_class reg_class)
 {
@@ -1750,7 +1755,7 @@ static int stm8_examine(struct target *target)
 
 /** Checks whether a memory region is erased. */
 static int stm8_blank_check_memory(struct target *target,
-		target_addr_t address, uint32_t count, uint32_t *blank, uint8_t erased_value)
+		struct target_memory_check_block *blocks, int num_blocks, uint8_t erased_value)
 {
 	struct working_area *erase_check_algorithm;
 	struct reg_param reg_params[2];
@@ -1778,10 +1783,10 @@ static int stm8_blank_check_memory(struct target *target,
 	stm8_info.common_magic = STM8_COMMON_MAGIC;
 
 	init_mem_param(&mem_params[0], 0x0, 3, PARAM_OUT);
-	buf_set_u32(mem_params[0].value, 0, 24, address);
+	buf_set_u32(mem_params[0].value, 0, 24, blocks[0].address);
 
 	init_mem_param(&mem_params[1], 0x3, 3, PARAM_OUT);
-	buf_set_u32(mem_params[1].value, 0, 24, count);
+	buf_set_u32(mem_params[1].value, 0, 24, blocks[0].size);
 
 	init_reg_param(&reg_params[0], "a", 32, PARAM_IN_OUT);
 	buf_set_u32(reg_params[0].value, 0, 32, erased_value);
@@ -1795,15 +1800,19 @@ static int stm8_blank_check_memory(struct target *target,
 			10000, &stm8_info);
 
 	if (retval == ERROR_OK)
-		*blank = (*(reg_params[0].value) == 0xff);
+		blocks[0].result = (*(reg_params[0].value) == 0xff);
 
 	destroy_mem_param(&mem_params[0]);
 	destroy_mem_param(&mem_params[1]);
 	destroy_reg_param(&reg_params[0]);
+	destroy_reg_param(&reg_params[1]);
 
 	target_free_working_area(target, erase_check_algorithm);
 
-	return retval;
+	if (retval != ERROR_OK)
+		return retval;
+
+	return 1;	/* only one block has been checked */
 }
 
 static int stm8_checksum_memory(struct target *target, target_addr_t address,
@@ -1881,6 +1890,8 @@ static int stm8_run_algorithm(struct target *target, int num_mem_params,
 	}
 
 	for (int i = 0; i < num_mem_params; i++) {
+		if (mem_params[i].direction == PARAM_IN)
+			continue;
 		retval = target_write_buffer(target, mem_params[i].address,
 				mem_params[i].size, mem_params[i].value);
 		if (retval != ERROR_OK)
@@ -1888,6 +1899,9 @@ static int stm8_run_algorithm(struct target *target, int num_mem_params,
 	}
 
 	for (int i = 0; i < num_reg_params; i++) {
+		if (reg_params[i].direction == PARAM_IN)
+			continue;
+
 		struct reg *reg = register_get_by_name(stm8->core_cache,
 				reg_params[i].reg_name, 0);
 
@@ -2133,7 +2147,7 @@ COMMAND_HANDLER(stm8_handle_enable_step_irq_command)
 		stm8->enable_step_irq = enable;
 	}
 	msg = stm8->enable_step_irq ? "enabled" : "disabled";
-	command_print(CMD_CTX, "enable_step_irq = %s", msg);
+	command_print(CMD, "enable_step_irq = %s", msg);
 	return ERROR_OK;
 }
 
@@ -2149,7 +2163,7 @@ COMMAND_HANDLER(stm8_handle_enable_stm8l_command)
 		stm8->enable_stm8l = enable;
 	}
 	msg = stm8->enable_stm8l ? "enabled" : "disabled";
-	command_print(CMD_CTX, "enable_stm8l = %s", msg);
+	command_print(CMD, "enable_stm8l = %s", msg);
 	stm8_init_flash_regs(stm8->enable_stm8l, stm8);
 	return ERROR_OK;
 }
@@ -2196,6 +2210,7 @@ struct target_type stm8_target = {
 	.assert_reset = stm8_reset_assert,
 	.deassert_reset = stm8_reset_deassert,
 
+	.get_gdb_arch = stm8_get_gdb_arch,
 	.get_gdb_reg_list = stm8_get_gdb_reg_list,
 
 	.read_memory = stm8_read_memory,
